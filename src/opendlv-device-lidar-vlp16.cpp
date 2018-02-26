@@ -44,17 +44,11 @@ int32_t main(int32_t argc, char **argv) {
         cluon::UDPReceiver fromDevice(VLP16_ADDRESS, VLP16_PORT,
             [&od4Session = od4, &decoder = vlp16Decoder, senderStamp = ID, VERBOSE](std::string &&d, std::string &&/*from*/, std::chrono::system_clock::time_point &&tp) noexcept {
             auto retVal = decoder.decode(d);
-            if (!retVal.empty()) {
-                cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
-
-                for(auto e : retVal) {
-                    od4Session.send(e, sampleTime, senderStamp);
-                }
-
-                // Print values on console.
-                if (VERBOSE) {
-                    std::cout << "[lidar-vlp16] Decoded data into PointCloudReading." << std::endl;
-                }
+            cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+            od4Session.send(retVal, sampleTime, senderStamp);
+            // Print values on console.
+            if (VERBOSE) {
+                std::cout << "[lidar-vlp16] Decoded data into PointCloudReading." << std::endl;
             }
         });
 

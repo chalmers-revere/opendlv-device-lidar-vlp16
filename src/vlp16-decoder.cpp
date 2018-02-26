@@ -1744,12 +1744,12 @@ const char *VLP16_XML = R"(
 
 VLP16Decoder::VLP16Decoder() noexcept {
     setupCalibration();
-    index32sensorIDs();
+    index16sensorIDs();
 }
 
 void VLP16Decoder::setupCalibration() noexcept {
-    // A HDL-32E has 32 channels/sensors. Each sensor has a specific vertical
-    // angle, which can be read from m_verticalAngle[sensor ID] as specified
+    // VLP-16 has 16 channels/sensors. Each sensor has a specific vertical
+    // angle, which can be read from m_verticalAngle[sensor ID] is specified
     // in the calibration file.
     const std::string CALIBRATION(VLP16_XML);
     std::stringstream sstr(CALIBRATION);
@@ -1757,7 +1757,7 @@ void VLP16Decoder::setupCalibration() noexcept {
     bool found{false};
     uint8_t counter{0}; // Corresponds to the index of the vertical angle of each beam.
     std::string line;
-    while (getline(sstr, line) && (32 > counter)) {
+    while (getline(sstr, line) && (16 > counter)) {
         std::string tmp; // Strip whitespaces from the beginning.
         for (uint8_t i = 0; i < line.length(); i++) {
             if (!((line[i] == '\t' || line[i] == ' ') && tmp.size() == 0)) {
@@ -1783,23 +1783,19 @@ void VLP16Decoder::setupCalibration() noexcept {
     }
 }
 
-void VLP16Decoder::index32sensorIDs() noexcept {
-    // Distance values for each 32 sensors with the same azimuth are ordered
-    // based on vertical angle, from -30.67 to 10.67 degrees, with alternating
-    // increment 1.33 and 1.34--sensor IDs: -30.67, -29.33, -28, -26.66, -25.33,
-    // -24, -22.67, -21.33, -20, -18.67, -17.33, -16, -14.67, -13.33, -12, 
-    // -10.67, -9.33, -8, -6.66, -5.33, -4, -2.67, -1.33, 0, 1.33, 2.67, 4, 
-    // 5.33, 6.67, 8, 9.33, 10.67
-
-    std::array<float, 32> orderedVerticalAngle;
-    for (uint8_t i = 0; i < 32; i++) {
-        m_32SensorsNoIntensity[i] = 0;
+void VLP16Decoder::index16sensorIDs() noexcept {
+    // Distance values for each 16 sensors with the same azimuth are ordered
+    // based on vertical angle, from -15 to 15 degress, with increment 
+    // 2--sensor IDs: 0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15
+    std::array<float, 16> orderedVerticalAngle;
+    for (uint8_t i = 0; i < 16; i++) {
+        m_16SensorsNoIntensity[i] = 0;
         orderedVerticalAngle[i] = m_verticalAngle[i];
     }
 
-    // Order the vertical angles of 32 sensor IDs with increasing value.
-    for (uint8_t i = 0; i < 32; i++) {
-        for (uint8_t j = i; j < 32; j++) {
+    // Order the vertical angles of 16 sensor IDs with increasing value.
+    for (uint8_t i = 0; i < 16; i++) {
+        for (uint8_t j = i; j < 16; j++) {
             if (orderedVerticalAngle[j] < orderedVerticalAngle[i]) {
                 std::swap(orderedVerticalAngle[j], orderedVerticalAngle[i]);
             }
@@ -1807,8 +1803,8 @@ void VLP16Decoder::index32sensorIDs() noexcept {
     }
 
     // Find the sensor IDs in the odered list of vertical angles.
-    for (uint8_t i = 0; i < 32; i++) {
-        for (uint8_t j = 0; j < 32; j++) {
+    for (uint8_t i = 0; i < 16; i++) {
+        for (uint8_t j = 0; j < 16; j++) {
             if (std::abs(orderedVerticalAngle[i] - m_verticalAngle[j]) < 0.1f) {
                 m_sensorOrderIndex[i] = j;
                 break;
@@ -1817,109 +1813,128 @@ void VLP16Decoder::index32sensorIDs() noexcept {
     }
 }
 
-std::vector<opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const std::string &data) noexcept {
-    std::vector<opendlv::proxy::PointCloudReading> retVal;
+opendlv::proxy::PointCloudReading VLP16Decoder::decode(const std::string &data) noexcept {
+    opendlv::proxy::PointCloudReading retVal;
 
     if (1206 == data.size()) {
-        // Decode VLP-32 data.
+        // Decode VLP-16 data.
         uint32_t position = 0; // Position specifies the starting position to read from the 1206 bytes.
 
-        // The data of a VLP-32 packet consists of 12 blocks with 100 bytes each. Decode each block separately.
+        // The data of a VLP-16 packet consists of 12 blocks with 100 bytes each. Decode each block separately.
         uint8_t firstByte{0}, secondByte{0}, thirdByte{0}; // Two bytes for distance and one byte for intensity.
         uint16_t dataValue{0};
         for (uint8_t blockID{0}; blockID < 12; blockID++) {
             // Skip the flag: 0xEEFF for upper block or 0xDDFF for lower block (2 bytes).
             position += 2;
 
-            // Decode azimuth information: 2 bytes. Swap the two bytes, change to decimal, and divide it by 100.
-            firstByte = static_cast<uint8_t>(data.at(position));
-            secondByte = static_cast<uint8_t>(data.at(position + 1));
-            dataValue = be16toh(firstByte * 256 + secondByte);
-            m_currentAzimuth = static_cast<float>(dataValue/100.0f);
-
+            // Decode azimuth information: 2 bytes. Swap the two bytes, change
+            // to decimal, and divide it by 100. Due to azimuth interpolation,
+            // the azimuth of blocks 1-11 is already decoded in the middle of
+            // the previous block.
+            if (blockID == 0) {
+                firstByte = static_cast<uint8_t>(data.at(position));
+                secondByte = static_cast<uint8_t>(data.at(position + 1));
+                dataValue = be16toh(firstByte * 256 + secondByte);
+                m_currentAzimuth = static_cast<float>(dataValue/100.0f);
+            }
+            else {
+                m_currentAzimuth = m_nextAzimuth;
+                if (m_currentAzimuth > 360.0f) {
+                    m_currentAzimuth -= 360.0f;
+                }
+            }
             if (m_currentAzimuth < m_previousAzimuth) {
                 // Return data from complete sweep.
-                opendlv::proxy::PointCloudReading pointCloudPart1;
-                pointCloudPart1.startAzimuth(m_startAzimuth)
-                               .endAzimuth(m_previousAzimuth)
-                               .entriesPerAzimuth(12)
-                               .distances(m_distanceStringStreamNoIntensityPart1.str())
-                               .numberOfBitsForIntensity(0);
-
-                opendlv::proxy::PointCloudReading pointCloudPart2;
-                pointCloudPart2.startAzimuth(m_startAzimuth)
-                               .endAzimuth(m_previousAzimuth)
-                               .entriesPerAzimuth(11)
-                               .distances(m_distanceStringStreamNoIntensityPart2.str())
-                               .numberOfBitsForIntensity(0);
-
-                opendlv::proxy::PointCloudReading pointCloudPart3;
-                pointCloudPart3.startAzimuth(m_startAzimuth)
-                               .endAzimuth(m_previousAzimuth)
-                               .entriesPerAzimuth(9)
-                               .distances(m_distanceStringStreamNoIntensityPart3.str())
-                               .numberOfBitsForIntensity(0);
-
-                retVal.push_back(pointCloudPart1);
-                retVal.push_back(pointCloudPart2);
-                retVal.push_back(pointCloudPart3);
+                constexpr uint16_t ENTRIES_PER_AZIMUTH{16};
+                retVal.startAzimuth(m_startAzimuth)
+                      .endAzimuth(m_previousAzimuth)
+                      .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
+                      .distances(m_distanceStringStreamNoIntensity.str())
+                      .numberOfBitsForIntensity(0);
 
                 m_pointIndexCPC = 0;
                 m_startAzimuth = m_currentAzimuth;
-                m_distanceStringStreamNoIntensityPart1.str("");
-                m_distanceStringStreamNoIntensityPart2.str("");
-                m_distanceStringStreamNoIntensityPart3.str("");
+                m_distanceStringStreamNoIntensity.str("");
             }
 
             m_previousAzimuth = m_currentAzimuth;
             position += 2;
 
+
             // Only decode the data if the maximum number of points of the
             // current frame has not been reached.
             if (m_pointIndexCPC < MAX_POINT_SIZE) {
-                // Decode distance information and intensity of each beam/channel in a block.
+                // Decode distance information and intensity of each beam/channel
+                // in a block, which contains two firing sequences
                 for (uint8_t counter{0}; counter < 32; counter++) {
-                    uint8_t sensorID = counter;
+                    // Interpolate azimuth value
+                    if (counter == 16) {
+                        if (blockID < 11) {
+                            position += 50; //3*16+2, move the pointer to the azimuth bytes of the next data block
+                            // Decode distance: 2 bytes. Swap bytes.
+                            firstByte = (uint8_t)(data.at(position));
+                            secondByte = (uint8_t)(data.at(position + 1));
+                            thirdByte = (uint8_t)(data.at(position + 2)); // Original intensity value.
+                            (void)thirdByte;
+                            dataValue = be16toh(firstByte * 256 + secondByte);
+                            m_nextAzimuth = static_cast<float>(dataValue/100.0f);
+                            position -= 50; //reset pointer
+                            if (m_nextAzimuth < m_currentAzimuth) {
+                                m_nextAzimuth += 360.0f;
+                            }
+                            m_deltaAzimuth = (m_nextAzimuth - m_currentAzimuth) / 2.0f;
+                            m_currentAzimuth += m_deltaAzimuth;
+                        }
+                        else {
+                            m_currentAzimuth += m_deltaAzimuth;
+                        }
+                        if (m_currentAzimuth > 360.0f) {
+                            m_currentAzimuth -= 360.0f;
 
-                    // Decode distance: 2 bytes. Swap bytes.
+                            // Return data from complete sweep.
+                            constexpr uint16_t ENTRIES_PER_AZIMUTH{16};
+                            retVal.startAzimuth(m_startAzimuth)
+                                  .endAzimuth(m_previousAzimuth)
+                                  .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
+                                  .distances(m_distanceStringStreamNoIntensity.str())
+                                  .numberOfBitsForIntensity(0);
+
+                            m_pointIndexCPC = 0;
+                            m_startAzimuth = m_currentAzimuth;
+                            m_distanceStringStreamNoIntensity.str("");
+                        }
+                        m_previousAzimuth = m_currentAzimuth;
+                    }
+
+                    uint8_t sensorID = counter;
+                    if (counter > 15) {
+                        sensorID = counter - 16;
+                    }
+                    //Decode distance: 2 bytes. Swap the bytes
                     firstByte = (uint8_t)(data.at(position));
                     secondByte = (uint8_t)(data.at(position + 1));
-                    thirdByte = (uint8_t)(data.at(position + 2)); // Original intensity value.
-                    (void)thirdByte;
+                    thirdByte = (uint8_t)(data.at(position + 2));//original intensity value
 
-                    if (m_pointIndexCPC < MAX_POINT_SIZE) {
-                        // Store distance with resolution 0.02m in an array of uint16_t type.
-                        m_32SensorsNoIntensity[sensorID] = be16toh(firstByte * 256 + secondByte);
-
-                        // TODO: Always in cm encoding for now.
-                        if (m_distanceEncoding == 0) {
-                            m_32SensorsNoIntensity[sensorID] = static_cast<uint16_t>(m_32SensorsNoIntensity[sensorID]/5.0f); // Store distance with resolution 1cm instead
-                        }
-
-                        if (sensorID == 31) {
-                            for (uint8_t index{0}; index < 32; index++) {
-                                m_32SensorsNoIntensity[m_sensorOrderIndex[index]] = htobe16(m_32SensorsNoIntensity[m_sensorOrderIndex[index]]);
-                                if (index == 0 || (index % 3 == 1)) {
-                                    // Layer 0, 1, 4, 7..., i.e., in addition to Layer 0, every 3rd layer from Layer 1 and resulting in 12 layers
-                                    m_distanceStringStreamNoIntensityPart1.write(reinterpret_cast<char*>(&m_32SensorsNoIntensity[m_sensorOrderIndex[index]]), 2);
-                                }
-                                else if (index == 2 || (index % 3 == 0)) {
-                                    // Layer 2, 3, 6, 9..., i.e., in addition to Layer 2, every 3rd layer from Layer 3 and resulting in 11 layers
-                                    m_distanceStringStreamNoIntensityPart2.write(reinterpret_cast<char*>(&m_32SensorsNoIntensity[m_sensorOrderIndex[index]]), 2);
-                                }
-                                else {
-                                    // Layer 5, 8, 11..., i.e., every 3rd layer from Layer 5 and resulting in 9 layers
-                                    m_distanceStringStreamNoIntensityPart3.write(reinterpret_cast<char*>(&m_32SensorsNoIntensity[m_sensorOrderIndex[index]]), 2);
-                                }
-                            }
-                        }
-                        m_pointIndexCPC++;
+                    // Store distance with resolution 2mm in an array of uint16_t type
+                    m_16SensorsNoIntensity[sensorID] = be16toh(firstByte * 256 + secondByte);
+                    // TODO: Always in cm encoding for now.
+                    if (m_distanceEncoding == 0) {
+                        m_16SensorsNoIntensity[sensorID] = m_16SensorsNoIntensity[sensorID] / 5;  //Store distance with resolution 1cm instead
                     }
+                    
+                    if (sensorID == 15) {
+                        for (uint8_t index{0}; index < 16; index++) {
+                            m_16SensorsNoIntensity[m_sensorOrderIndex[index]] = htobe16(m_16SensorsNoIntensity[m_sensorOrderIndex[index]]);
+                            m_distanceStringStreamNoIntensity.write((char*)(&m_16SensorsNoIntensity[m_sensorOrderIndex[index]]), 2);
+                        }
+                    }
+                    m_pointIndexCPC++;
+
                     position += 3;
 
                     if (m_pointIndexCPC >= MAX_POINT_SIZE) {
                         position += 3 * (31 - counter); // Discard the points of the current frame when the preallocated shared memory is full; move the position to be read in the 1206 bytes
-                        std::cerr << "[lidar-vlp16] More than 70,000 points?" << std::endl; 
+                        std::cerr << "[lidar-vlp16] More than 30,000 points?" << std::endl; 
                         break;
                     }
                 }
