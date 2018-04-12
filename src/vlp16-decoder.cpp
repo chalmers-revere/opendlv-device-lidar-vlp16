@@ -1813,8 +1813,9 @@ void VLP16Decoder::index16sensorIDs() noexcept {
     }
 }
 
-opendlv::proxy::PointCloudReading VLP16Decoder::decode(const std::string &data) noexcept {
-    opendlv::proxy::PointCloudReading retVal;
+std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const std::string &data) noexcept {
+    bool hasCompletePointCloud{false};
+    opendlv::proxy::PointCloudReading pointCloud;
 
     if (1206 == data.size()) {
         // Decode VLP-16 data.
@@ -1846,11 +1847,14 @@ opendlv::proxy::PointCloudReading VLP16Decoder::decode(const std::string &data) 
             if (m_currentAzimuth < m_previousAzimuth) {
                 // Return data from complete sweep.
                 constexpr uint16_t ENTRIES_PER_AZIMUTH{16};
-                retVal.startAzimuth(m_startAzimuth)
-                      .endAzimuth(m_previousAzimuth)
-                      .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
-                      .distances(m_distanceStringStreamNoIntensity.str())
-                      .numberOfBitsForIntensity(0);
+                const std::string distanceValues = m_distanceStringStreamNoIntensity.str();
+                pointCloud.startAzimuth(m_startAzimuth)
+                          .endAzimuth(m_previousAzimuth)
+                          .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
+                          .distances(distanceValues)
+                          .numberOfBitsForIntensity(0);
+
+                hasCompletePointCloud = true;
 
                 m_pointIndexCPC = 0;
                 m_startAzimuth = m_currentAzimuth;
@@ -1893,11 +1897,14 @@ opendlv::proxy::PointCloudReading VLP16Decoder::decode(const std::string &data) 
 
                             // Return data from complete sweep.
                             constexpr uint16_t ENTRIES_PER_AZIMUTH{16};
-                            retVal.startAzimuth(m_startAzimuth)
-                                  .endAzimuth(m_previousAzimuth)
-                                  .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
-                                  .distances(m_distanceStringStreamNoIntensity.str())
-                                  .numberOfBitsForIntensity(0);
+                            const std::string distanceValues = m_distanceStringStreamNoIntensity.str();
+                            pointCloud.startAzimuth(m_startAzimuth)
+                                      .endAzimuth(m_previousAzimuth)
+                                      .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
+                                      .distances(distanceValues)
+                                      .numberOfBitsForIntensity(0);
+
+                            hasCompletePointCloud = true;
 
                             m_pointIndexCPC = 0;
                             m_startAzimuth = m_currentAzimuth;
@@ -1949,6 +1956,6 @@ opendlv::proxy::PointCloudReading VLP16Decoder::decode(const std::string &data) 
         // Skip 2 blank bytes.
     }
 
-    return retVal;
+    return std::make_pair(hasCompletePointCloud, pointCloud);
 }
 

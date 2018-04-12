@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <array>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 class VLP16Decoder {
@@ -42,9 +43,9 @@ class VLP16Decoder {
     /**
      * This method decodes the next packet from VLP16.
      *
-     * @return PointCloud.
+     * @return Tupel (bool, PointCloud) where bool is indicating that there is a point cloud to available.
      */
-    opendlv::proxy::PointCloudReading decode(const std::string &data) noexcept;
+    std::pair<bool, opendlv::proxy::PointCloudReading> decode(const std::string &data) noexcept;
 
    private:
     void setupCalibration() noexcept;
@@ -52,7 +53,7 @@ class VLP16Decoder {
 
    private:
     const uint32_t MAX_POINT_SIZE{30000}; // The maximum number of points per frame. 
-    uint8_t m_distanceEncoding{0}; // 0: cm; 1: 2mm. For now, always 0 = cm.
+    uint8_t m_distanceEncoding{1}; // 0: cm; 1: 2mm. For now, always 1 = cm.
 
     std::array<float, 16> m_verticalAngle{};
     std::array<uint8_t, 16> m_sensorOrderIndex{}; // Specify the sensor ID order for each 16 points with increasing vertical angle for PointCloudReading.
