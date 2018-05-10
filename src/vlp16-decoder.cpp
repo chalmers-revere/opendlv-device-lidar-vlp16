@@ -1925,7 +1925,7 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                     // Store distance with resolution 2mm in an array of uint16_t type
                     m_16SensorsNoIntensity[sensorID] = be16toh(firstByte * 256 + secondByte);
                     // TODO: Always in cm encoding for now.
-                    if (m_distanceEncoding == 0) {
+                    if (m_distanceEncoding == 1) {
                         m_16SensorsNoIntensity[sensorID] = m_16SensorsNoIntensity[sensorID] / 5;  //Store distance with resolution 1cm instead
                     }
                     
