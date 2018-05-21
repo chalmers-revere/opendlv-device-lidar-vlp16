@@ -25,12 +25,12 @@ int32_t main(int32_t argc, char **argv) {
     auto commandlineArguments = cluon::getCommandlineArguments(argc, argv);
     if ( (0 == commandlineArguments.count("vlp16_port")) || (0 == commandlineArguments.count("cid")) ) {
         std::cerr << argv[0] << " decodes pointcloud data from a VelodyneLidar VLP16 unit and publishes it to a running OpenDaVINCI session using the OpenDLV Standard Message Set." << std::endl;
-        std::cerr << "Usage:   " << argv[0] << " [--vlp16_ip=<IPv4-address>] --vlp16_port=<port> --cid=<OpenDaVINCI session> [--id=<Identifier in case of multiple lidars>] [--verbose] [--intensity=<number of lower bits used for intensity>]" << std::endl;
+        std::cerr << "Usage:   " << argv[0] << " [--vlp16_ip=<IPv4-address>] --vlp16_port=<port> --cid=<OpenDaVINCI session> [--id=<Identifier in case of multiple lidars>] [--verbose] [--intensity=<number of higher bits used for intensity>]" << std::endl;
         std::cerr << "         --intensity: VLP16 is using 16 bits to encode distances by default; when specifying this parameter with" << std::endl;
-        std::cerr << "                      a value n > 0, the lower n bits will be used to encode intensity values for a given" << std::endl;
-        std::cerr << "                      distance and thus, not using these n bits for small distances. Thus, specifying this" << std::endl;
+        std::cerr << "                      a value n > 0, the higher n bits will be used to encode intensity values for a given" << std::endl;
+        std::cerr << "                      distance and thus, not using these n bits for distances. Thus, specifying this" << std::endl;
         std::cerr << "                      parameter might impose a *SAFETY RISK* as this software would not report objects" << std::endl;
-        std::cerr << "                      that are close to the sensor. USE THIS PARAMETER AT YOUR OWN RISK!!" << std::endl;
+        std::cerr << "                      that are within that range to the sensor. USE THIS PARAMETER AT YOUR OWN RISK!!" << std::endl;
         std::cerr << "                      Possible value range is [0..6]." << std::endl;
         std::cerr << "Example: " << argv[0] << " --vlp16_ip=0.0.0.0 --vlp16_port=2368 --cid=111" << std::endl;
         retCode = 1;
