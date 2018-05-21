@@ -1853,9 +1853,7 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                           .endAzimuth(m_previousAzimuth)
                           .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
                           .distances(distanceValues)
-                          .numberOfBitsForIntensity(m_intensityBitsMSB)
-                          .intensityPlacement(0) // if intensity values shall be encoded, we place them in the higher distance readings
-                          .distanceEncoding(m_distanceEncoding);
+                          .numberOfBitsForIntensity(m_intensityBitsMSB);
 
                 hasCompletePointCloud = true;
 
@@ -1905,9 +1903,7 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                                       .endAzimuth(m_previousAzimuth)
                                       .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
                                       .distances(distanceValues)
-                                      .numberOfBitsForIntensity(m_intensityBitsMSB)
-                                      .intensityPlacement(0) // if intensity values shall be encoded, we place them in the higher distance readings
-                                      .distanceEncoding(m_distanceEncoding);
+                                      .numberOfBitsForIntensity(m_intensityBitsMSB);
 
                             hasCompletePointCloud = true;
 
@@ -1922,15 +1918,16 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                     if (counter > 15) {
                         sensorID = counter - 16;
                     }
-                    //Decode distance: 2 bytes. Swap the bytes
+
+                    // Decode distance: 2 bytes. Swap the bytes.
                     firstByte = (uint8_t)(data.at(position));
                     secondByte = (uint8_t)(data.at(position + 1));
-                    thirdByte = (uint8_t)(data.at(position + 2));//original intensity value
+                    thirdByte = (uint8_t)(data.at(position + 2)); // original intensity value.
 
                     // Store distance with resolution 2mm in an array of uint16_t type
                     m_16Sensors[sensorID] = be16toh(firstByte * 256 + secondByte);
                     // TODO: Always in cm encoding for now.
-                    if (m_distanceEncoding == 1) {
+                    if (m_distanceEncoding == 0) {
                         m_16Sensors[sensorID] = m_16Sensors[sensorID] / 5;  //Store distance with resolution 1cm instead
                     }
 

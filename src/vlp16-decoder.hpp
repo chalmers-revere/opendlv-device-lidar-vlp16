@@ -57,7 +57,7 @@ class VLP16Decoder {
    private:
     const uint32_t MAX_POINT_SIZE{30000}; // The maximum number of points per frame.
     int32_t m_intensityBitsMSB;
-    uint8_t m_distanceEncoding{1}; // 0: cm; 1: 2mm. For now, always 1 = mm.
+    uint8_t m_distanceEncoding{0}; // 0: cm; 1: 2mm. For now, always 1 = mm.
 
     std::array<float, 16> m_verticalAngle{};
     std::array<uint8_t, 16> m_sensorOrderIndex{}; // Specify the sensor ID order for each 16 points with increasing vertical angle for PointCloudReading.

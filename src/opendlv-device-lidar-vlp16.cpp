@@ -30,7 +30,7 @@ int32_t main(int32_t argc, char **argv) {
         std::cerr << "                      a value n > 0, the higher n bits will be used to encode intensity values for a given" << std::endl;
         std::cerr << "                      distance and thus, not using these n bits for distances. Thus, specifying this" << std::endl;
         std::cerr << "                      parameter might impose a *SAFETY RISK* as this software would not report objects" << std::endl;
-        std::cerr << "                      that are within that range to the sensor. USE THIS PARAMETER AT YOUR OWN RISK!!" << std::endl;
+        std::cerr << "                      that are within that particular range to the sensor. USE THIS PARAMETER AT YOUR OWN RISK!!" << std::endl;
         std::cerr << "                      Possible value range is [0..6]." << std::endl;
         std::cerr << "Example: " << argv[0] << " --vlp16_ip=0.0.0.0 --vlp16_port=2368 --cid=111" << std::endl;
         retCode = 1;
