@@ -1742,7 +1742,8 @@ const char *VLP16_XML = R"(
 
 ////////////////////////////////////////////////////////////////////////////////
 
-VLP16Decoder::VLP16Decoder() noexcept {
+VLP16Decoder::VLP16Decoder(int32_t intensity) noexcept 
+    : m_intensityBitsLSB(intensity) {
     setupCalibration();
     index16sensorIDs();
 }
@@ -1789,7 +1790,7 @@ void VLP16Decoder::index16sensorIDs() noexcept {
     // 2--sensor IDs: 0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15
     std::array<float, 16> orderedVerticalAngle;
     for (uint8_t i = 0; i < 16; i++) {
-        m_16SensorsNoIntensity[i] = 0;
+        m_16Sensors[i] = 0;
         orderedVerticalAngle[i] = m_verticalAngle[i];
     }
 
@@ -1847,18 +1848,20 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
             if (m_currentAzimuth < m_previousAzimuth) {
                 // Return data from complete sweep.
                 constexpr uint16_t ENTRIES_PER_AZIMUTH{16};
-                const std::string distanceValues = m_distanceStringStreamNoIntensity.str();
+                const std::string distanceValues = m_distanceStringStream.str();
                 pointCloud.startAzimuth(m_startAzimuth)
                           .endAzimuth(m_previousAzimuth)
                           .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
                           .distances(distanceValues)
-                          .numberOfBitsForIntensity(0);
+                          .numberOfBitsForIntensity(m_intensityBitsLSB)
+                          .intensityPlacement((m_intensityBitsLSB > 0) ? 1 : 0) // if intensity values shall be encoded, we place them in the lower distance readings
+                          .distanceEncoding(m_distanceEncoding);
 
                 hasCompletePointCloud = true;
 
                 m_pointIndexCPC = 0;
                 m_startAzimuth = m_currentAzimuth;
-                m_distanceStringStreamNoIntensity.str("");
+                m_distanceStringStream.str("");
             }
 
             m_previousAzimuth = m_currentAzimuth;
@@ -1897,18 +1900,20 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
 
                             // Return data from complete sweep.
                             constexpr uint16_t ENTRIES_PER_AZIMUTH{16};
-                            const std::string distanceValues = m_distanceStringStreamNoIntensity.str();
+                            const std::string distanceValues = m_distanceStringStream.str();
                             pointCloud.startAzimuth(m_startAzimuth)
                                       .endAzimuth(m_previousAzimuth)
                                       .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
                                       .distances(distanceValues)
-                                      .numberOfBitsForIntensity(0);
+                                      .numberOfBitsForIntensity(m_intensityBitsLSB)
+                                      .intensityPlacement((m_intensityBitsLSB > 0) ? 1 : 0) // if intensity values shall be encoded, we place them in the lower distance readings
+                                      .distanceEncoding(m_distanceEncoding);
 
                             hasCompletePointCloud = true;
 
                             m_pointIndexCPC = 0;
                             m_startAzimuth = m_currentAzimuth;
-                            m_distanceStringStreamNoIntensity.str("");
+                            m_distanceStringStream.str("");
                         }
                         m_previousAzimuth = m_currentAzimuth;
                     }
@@ -1923,16 +1928,25 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                     thirdByte = (uint8_t)(data.at(position + 2));//original intensity value
 
                     // Store distance with resolution 2mm in an array of uint16_t type
-                    m_16SensorsNoIntensity[sensorID] = be16toh(firstByte * 256 + secondByte);
+                    m_16Sensors[sensorID] = be16toh(firstByte * 256 + secondByte);
                     // TODO: Always in cm encoding for now.
                     if (m_distanceEncoding == 1) {
-                        m_16SensorsNoIntensity[sensorID] = m_16SensorsNoIntensity[sensorID] / 5;  //Store distance with resolution 1cm instead
+                        m_16Sensors[sensorID] = m_16Sensors[sensorID] / 5;  //Store distance with resolution 1cm instead
                     }
-                    
+
+                    if (m_intensityBitsLSB > 0) {
+                        uint16_t distanceWithIntensity{m_16Sensors[sensorID]};
+                        const uint16_t MASK = 0xFFFF << m_intensityBitsLSB;
+                        distanceWithIntensity &= MASK;
+                        const uint16_t INTENSITY = thirdByte >> (8 - m_intensityBitsLSB);
+                        distanceWithIntensity += INTENSITY;
+                        m_16Sensors[sensorID] = distanceWithIntensity;
+                    }
+
                     if (sensorID == 15) {
                         for (uint8_t index{0}; index < 16; index++) {
-                            m_16SensorsNoIntensity[m_sensorOrderIndex[index]] = htobe16(m_16SensorsNoIntensity[m_sensorOrderIndex[index]]);
-                            m_distanceStringStreamNoIntensity.write((char*)(&m_16SensorsNoIntensity[m_sensorOrderIndex[index]]), 2);
+                            m_16Sensors[m_sensorOrderIndex[index]] = htobe16(m_16Sensors[m_sensorOrderIndex[index]]);
+                            m_distanceStringStream.write((char*)(&m_16Sensors[m_sensorOrderIndex[index]]), 2);
                         }
                     }
                     m_pointIndexCPC++;

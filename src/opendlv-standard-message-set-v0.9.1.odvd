@@ -155,6 +155,8 @@ message opendlv.proxy.PointCloudReading [id = 49] {
   uint8 entriesPerAzimuth [id = 3];
   bytes distances [id = 4];
   uint8 numberOfBitsForIntensity [id = 5];
+  int32 intensityPlacement [id = 6]; // 0 = use higher bits for intensity, 1 = use lower bits for intensity
+  int32 distanceEncoding [id = 7]; // 0 = distances are encoded as cm, 1 = distances are encoded as 2mm
 }
 
 message opendlv.proxy.PointCloudReadingShared [id = 28] {
