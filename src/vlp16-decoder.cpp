@@ -1743,7 +1743,7 @@ const char *VLP16_XML = R"(
 ////////////////////////////////////////////////////////////////////////////////
 
 VLP16Decoder::VLP16Decoder(int32_t intensity) noexcept 
-    : m_intensityBitsLSB(intensity) {
+    : m_intensityBitsMSB(intensity) {
     setupCalibration();
     index16sensorIDs();
 }
@@ -1853,8 +1853,8 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                           .endAzimuth(m_previousAzimuth)
                           .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
                           .distances(distanceValues)
-                          .numberOfBitsForIntensity(m_intensityBitsLSB)
-                          .intensityPlacement((m_intensityBitsLSB > 0) ? 1 : 0) // if intensity values shall be encoded, we place them in the lower distance readings
+                          .numberOfBitsForIntensity(m_intensityBitsMSB)
+                          .intensityPlacement(0) // if intensity values shall be encoded, we place them in the higher distance readings
                           .distanceEncoding(m_distanceEncoding);
 
                 hasCompletePointCloud = true;
@@ -1905,8 +1905,8 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                                       .endAzimuth(m_previousAzimuth)
                                       .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
                                       .distances(distanceValues)
-                                      .numberOfBitsForIntensity(m_intensityBitsLSB)
-                                      .intensityPlacement((m_intensityBitsLSB > 0) ? 1 : 0) // if intensity values shall be encoded, we place them in the lower distance readings
+                                      .numberOfBitsForIntensity(m_intensityBitsMSB)
+                                      .intensityPlacement(0) // if intensity values shall be encoded, we place them in the higher distance readings
                                       .distanceEncoding(m_distanceEncoding);
 
                             hasCompletePointCloud = true;
@@ -1934,12 +1934,12 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                         m_16Sensors[sensorID] = m_16Sensors[sensorID] / 5;  //Store distance with resolution 1cm instead
                     }
 
-                    if (m_intensityBitsLSB > 0) {
+                    if (m_intensityBitsMSB > 0) {
                         uint16_t distanceWithIntensity{m_16Sensors[sensorID]};
-                        const uint16_t MASK = 0xFFFF << m_intensityBitsLSB;
+                        const uint16_t MASK = 0xFFFF >> m_intensityBitsMSB;
                         distanceWithIntensity &= MASK;
-                        const uint16_t INTENSITY = thirdByte >> (8 - m_intensityBitsLSB);
-                        distanceWithIntensity += INTENSITY;
+                        const uint16_t INTENSITY = thirdByte >> (8 - m_intensityBitsMSB);
+                        distanceWithIntensity += (INTENSITY << (16 - m_intensityBitsMSB) );
                         m_16Sensors[sensorID] = distanceWithIntensity;
                     }
 

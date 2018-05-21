@@ -56,7 +56,7 @@ class VLP16Decoder {
 
    private:
     const uint32_t MAX_POINT_SIZE{30000}; // The maximum number of points per frame.
-    int32_t m_intensityBitsLSB;
+    int32_t m_intensityBitsMSB;
     uint8_t m_distanceEncoding{1}; // 0: cm; 1: 2mm. For now, always 1 = mm.
 
     std::array<float, 16> m_verticalAngle{};
