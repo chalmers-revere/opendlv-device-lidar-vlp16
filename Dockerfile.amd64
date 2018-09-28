@@ -36,5 +36,5 @@ MAINTAINER Christian Berger "christian.berger@gu.se"
 
 WORKDIR /usr/bin
 COPY --from=builder /tmp/opendlv-device-lidar-vlp16-dest/bin/opendlv-device-lidar-vlp16 .
-CMD ["/usr/bin/opendlv-device-lidar-vlp16"]
+ENTRYPOINT ["/usr/bin/opendlv-device-lidar-vlp16"]
 
