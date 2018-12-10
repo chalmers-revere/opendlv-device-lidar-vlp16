@@ -26,6 +26,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 // Calibration data for VLP16.
 const char *VLP16_XML = R"(
@@ -1814,9 +1815,10 @@ void VLP16Decoder::index16sensorIDs() noexcept {
     }
 }
 
-std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const std::string &data) noexcept {
-    bool hasCompletePointCloud{false};
-    opendlv::proxy::PointCloudReading pointCloud;
+
+std::pair<std::vector<opendlv::proxy::PointCloudReading>, cluon::data::TimeStamp> VLP16Decoder::decode(const std::string &data) noexcept {
+    std::vector<opendlv::proxy::PointCloudReading> pointClouds;
+    cluon::data::TimeStamp sampleTimeStamp;
 
     if (1206 == data.size()) {
         // Decode VLP-16 data.
@@ -1849,13 +1851,13 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                 // Return data from complete sweep.
                 constexpr uint16_t ENTRIES_PER_AZIMUTH{16};
                 const std::string distanceValues = m_distanceStringStream.str();
+                opendlv::proxy::PointCloudReading pointCloud;
                 pointCloud.startAzimuth(m_startAzimuth)
                           .endAzimuth(m_previousAzimuth)
                           .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
                           .distances(distanceValues)
                           .numberOfBitsForIntensity(m_intensityBitsMSB);
-
-                hasCompletePointCloud = true;
+                pointClouds.push_back(pointCloud);
 
                 m_pointIndexCPC = 0;
                 m_startAzimuth = m_currentAzimuth;
@@ -1899,13 +1901,13 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
                             // Return data from complete sweep.
                             constexpr uint16_t ENTRIES_PER_AZIMUTH{16};
                             const std::string distanceValues = m_distanceStringStream.str();
+                            opendlv::proxy::PointCloudReading pointCloud;
                             pointCloud.startAzimuth(m_startAzimuth)
                                       .endAzimuth(m_previousAzimuth)
                                       .entriesPerAzimuth(ENTRIES_PER_AZIMUTH)
                                       .distances(distanceValues)
                                       .numberOfBitsForIntensity(m_intensityBitsMSB);
-
-                            hasCompletePointCloud = true;
+                            pointClouds.push_back(pointCloud);
 
                             m_pointIndexCPC = 0;
                             m_startAzimuth = m_currentAzimuth;
@@ -1962,11 +1964,38 @@ std::pair<bool, opendlv::proxy::PointCloudReading> VLP16Decoder::decode(const st
             }
         }
 
-        // TODO: Decode 4 bytes GPS time stamp.
+        if (1 == pointClouds.size()) {
+            // Completed point cloud; add timestamp.
+
+            // Decode 4 bytes GPS time stamp.
+            std::string tmp(data.data() + 1200, 4);
+            std::stringstream sstr(tmp);
+            uint32_t timeStampSinceFullHourInMicroseconds{0};
+            sstr.read(reinterpret_cast<char*>(&timeStampSinceFullHourInMicroseconds), sizeof(uint32_t));
+            timeStampSinceFullHourInMicroseconds = le32toh(timeStampSinceFullHourInMicroseconds);
+
+            // Get seconds for last full hour.
+            time_t secondsSinceEpoch = time(NULL);
+
+            struct tm timeBrokenDown{};
+            gmtime_r(&secondsSinceEpoch, &timeBrokenDown);
+
+            // Reset minutes and seconds to 0.
+            timeBrokenDown.tm_sec = 0;
+            timeBrokenDown.tm_min = 0;
+
+            time_t secondsSinceEpochWithMinAndSecsToZero = mktime(&timeBrokenDown);
+
+            // Add timestamp from sensor.
+            secondsSinceEpochWithMinAndSecsToZero += static_cast<time_t>(round(timeStampSinceFullHourInMicroseconds/(1000.0f*1000.0f)));
+
+            sampleTimeStamp.seconds(secondsSinceEpochWithMinAndSecsToZero)
+                           .microseconds(timeStampSinceFullHourInMicroseconds%(1000*1000));
+        }
 
         // Skip 2 blank bytes.
     }
 
-    return std::make_pair(hasCompletePointCloud, pointCloud);
+    return std::make_pair(pointClouds, sampleTimeStamp);
 }
 

@@ -25,7 +25,8 @@ int32_t main(int32_t argc, char **argv) {
     auto commandlineArguments = cluon::getCommandlineArguments(argc, argv);
     if ( (0 == commandlineArguments.count("vlp16_port")) || (0 == commandlineArguments.count("cid")) ) {
         std::cerr << argv[0] << " decodes pointcloud data from a VelodyneLidar VLP16 unit and publishes it to a running OpenDaVINCI session using the OpenDLV Standard Message Set." << std::endl;
-        std::cerr << "Usage:   " << argv[0] << " [--vlp16_ip=<IPv4-address>] --vlp16_port=<port> --cid=<OpenDaVINCI session> [--id=<Identifier in case of multiple lidars>] [--verbose] [--intensity=<number of higher bits used for intensity>]" << std::endl;
+        std::cerr << "Usage:   " << argv[0] << " [--vlp16_ip=<IPv4-address>] --vlp16_port=<port> --cid=<OpenDaVINCI session> [--id=<Identifier in case of multiple lidars>] [--gpstime] [--intensity=<number of higher bits used for intensity>] [--verbose]" << std::endl;
+        std::cerr << "         --gpstime:   Use a GPS receiver (optionally connected and configured with the lidar) for time-stamping." << std::endl;
         std::cerr << "         --intensity: VLP16 is using 16 bits to encode distances by default; when specifying this parameter with" << std::endl;
         std::cerr << "                      a value n > 0, the higher n bits will be used to encode intensity values for a given" << std::endl;
         std::cerr << "                      distance and thus, not using these n bits for distances. Thus, specifying this" << std::endl;
@@ -42,6 +43,7 @@ int32_t main(int32_t argc, char **argv) {
             INTENSITY = 0;
         }
         const bool VERBOSE{commandlineArguments.count("verbose") != 0};
+        const bool USE_GPSTIME{commandlineArguments.count("gpstime") != 0};
 
         // Interface to a running OpenDaVINCI session (ignoring any incoming Envelopes).
         cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"])),
@@ -53,14 +55,17 @@ int32_t main(int32_t argc, char **argv) {
         const uint32_t VLP16_PORT(std::stoi(commandlineArguments["vlp16_port"]));
         VLP16Decoder vlp16Decoder(INTENSITY);
         cluon::UDPReceiver fromDevice(VLP16_ADDRESS, VLP16_PORT,
-            [&od4Session = od4, &decoder = vlp16Decoder, senderStamp = ID, VERBOSE](std::string &&d, std::string &&/*from*/, std::chrono::system_clock::time_point &&tp) noexcept {
+            [&od4Session = od4, &decoder = vlp16Decoder, senderStamp = ID, USE_GPSTIME, VERBOSE](std::string &&d, std::string &&/*from*/, std::chrono::system_clock::time_point &&tp) noexcept {
             auto retVal = decoder.decode(d);
-            if (retVal.first) {
-                cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
-                od4Session.send(retVal.second, sampleTime, senderStamp);
+            if (!retVal.first.empty()) {
+                cluon::data::TimeStamp sampleTime{(!USE_GPSTIME) ? cluon::time::convert(tp) : retVal.second};
+                for(auto e : retVal.first) {
+                     od4Session.send(e, sampleTime, senderStamp);
+                }
+
                 // Print values on console.
                 if (VERBOSE) {
-                    std::cout << "[lidar-vlp16] Decoded data into PointCloudReading." << std::endl;
+                    std::cout << "[lidar-vlp16] Decoded data into PointCloudReading at " << sampleTime.seconds() << "." << sampleTime.microseconds() << std::endl;
                 }
             }
         });

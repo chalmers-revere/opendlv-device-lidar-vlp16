@@ -20,6 +20,7 @@
 #ifndef VLP16_DECODER
 #define VLP16_DECODER
 
+#include "cluon-complete.hpp"
 #include "opendlv-standard-message-set.hpp"
 
 #include <cstdint>
@@ -46,9 +47,9 @@ class VLP16Decoder {
     /**
      * This method decodes the next packet from VLP16.
      *
-     * @return Tupel (bool, PointCloud) where bool is indicating that there is a point cloud to available.
+     * @return Tupel (list of PointClouds, timestamp).
      */
-    std::pair<bool, opendlv::proxy::PointCloudReading> decode(const std::string &data) noexcept;
+    std::pair<std::vector<opendlv::proxy::PointCloudReading>, cluon::data::TimeStamp> decode(const std::string &data) noexcept;
 
    private:
     void setupCalibration() noexcept;
