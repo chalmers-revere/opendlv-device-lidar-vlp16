@@ -1,3 +1,5 @@
+Moved to https://git.opendlv.org.
+
 ## OpenDLV Microservice to interface with VelodyneLidar VLP16 units
 
 This repository provides source code to interface with a VelodyneLidar VLP16
